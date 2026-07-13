@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Свод — редактор и склейка кода</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b0c;
+    --panel:#151517;
+    --panel-2:#1c1c1f;
+    --panel-3:#232326;
+    --border:#2b2b2e;
+    --border-soft:#222224;
+    --text:#f2f2f0;
+    --text-dim:#98989e;
+    --text-faint:#5c5c62;
+    --line:#3a3a3e;
+    --radius:10px;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #1a1a1c 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, #151517 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--display);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  button{font-family:inherit;}
+  ::selection{background:#4a4a50;color:#fff;}
+
+  /* ---------- header ---------- */
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 28px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:rgba(11,11,12,0.86);backdrop-filter:blur(10px);
+    z-index:20;gap:16px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;background:var(--panel-2);
+    font-family:var(--mono);font-weight:600;font-size:14px;color:var(--text-dim);
+  }
+  .brand h1{font-size:16px;margin:0;font-weight:600;letter-spacing:0.2px;}
+  .brand p{margin:0;font-size:11.5px;color:var(--text-faint);font-family:var(--mono);}
+
+  .status-widget{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--text-dim);}
+  .status-widget .label{white-space:nowrap;}
+
+  /* ---------- layout ---------- */
+  main{max-width:1400px;margin:0 auto;padding:22px 28px 60px;}
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;
+  }
+  .toolbar .spacer{flex:1;}
+  select, .btn, input[type=text]{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:9px 13px;font-size:13px;font-family:var(--display);
+    cursor:pointer;transition:border-color .15s ease, background .15s ease;
+  }
+  select{font-family:var(--mono);appearance:none;background-image:
+      linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+      linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+      background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px;
+  }
+  .btn:hover{border-color:var(--line);background:var(--panel-3);}
+  .btn:active{transform:translateY(1px);}
+  .btn:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid #d9d9de;outline-offset:1px;
+  }
+  .btn.primary{background:var(--text);color:#0b0b0c;border-color:var(--text);font-weight:600;}
+  .btn.primary:hover{background:#dcdcdc;}
+  .btn.ghost{background:transparent;}
+  input[type=file]{display:none;}
+
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start;}
+  @media (max-width:980px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:12px 16px;border-bottom:1px solid var(--border-soft);
+  }
+  .panel-head h2{font-size:12px;margin:0;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);}
+  .panel-body{padding:14px 16px;}
+
+  /* ---------- editor ---------- */
+  .editor-wrap{display:flex;height:56vh;min-height:420px;border-top:1px solid var(--border-soft);}
+  .gutter{
+    font-family:var(--mono);font-size:13px;line-height:21px;color:var(--text-faint);
+    text-align:right;padding:14px 10px 14px 0;user-select:none;overflow:hidden;
+    background:var(--panel-2);border-right:1px solid var(--border-soft);white-space:pre;
+    min-width:46px;
+  }
+  #codeInput{
+    flex:1;resize:none;border:none;outline:none;background:var(--panel);color:var(--text);
+    font-family:var(--mono);font-size:13px;line-height:21px;padding:14px 16px;
+    tab-size:4;white-space:pre;overflow:auto;
+  }
+  .error-line-marker{color:#e8e8ea;}
+
+  .editor-footbar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    padding:10px 16px;border-top:1px solid var(--border-soft);
+    font-family:var(--mono);font-size:11.5px;color:var(--text-faint);
+    background:var(--panel-2);
+  }
+  .editor-footbar .actions{display:flex;gap:8px;}
+
+  /* ---------- search ---------- */
+  .search-row{display:flex;gap:8px;}
+  .search-row input{flex:1;}
+  .results-list{list-style:none;margin:10px 0 0;padding:0;max-height:150px;overflow:auto;}
+  .results-list li{
+    font-family:var(--mono);font-size:12px;color:var(--text-dim);
+    border:1px solid var(--border-soft);border-radius:6px;padding:6px 9px;margin-bottom:6px;
+    cursor:pointer;background:var(--panel-2);
+  }
+  .results-list li:hover{border-color:var(--line);color:var(--text);}
+  .muted{color:var(--text-faint);font-size:12px;font-family:var(--mono);}
+
+  /* ---------- lint panel ---------- */
+  #lintList{list-style:none;margin:0;padding:0;max-height:200px;overflow:auto;}
+  #lintList li{
+    font-family:var(--mono);font-size:12px;color:var(--text-dim);
+    border:1px solid var(--border-soft);border-radius:6px;padding:7px 10px;margin-bottom:6px;
+    cursor:pointer;background:var(--panel-2);display:flex;gap:8px;
+  }
+  #lintList li:hover{border-color:var(--line);color:var(--text);}
+  #lintList li .ln{color:var(--text-faint);flex-shrink:0;}
+  .ok-msg{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);display:flex;gap:10px;align-items:center;}
+
+  /* ---------- merge panel ---------- */
+  .part{
+    border:1px solid var(--border-soft);border-radius:8px;margin-bottom:10px;background:var(--panel-2);
+  }
+  .part-head{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--text-faint);border-bottom:1px solid var(--border-soft);}
+  .part textarea{
+    width:100%;min-height:90px;resize:vertical;background:transparent;border:none;outline:none;
+    color:var(--text);font-family:var(--mono);font-size:12.5px;line-height:19px;padding:10px;
+  }
+  .part-head button{background:none;border:none;color:var(--text-faint);cursor:pointer;font-family:var(--mono);font-size:11px;}
+  .part-head button:hover{color:var(--text);}
+
+  footer.note{
+    max-width:1400px;margin:0 auto;padding:0 28px 40px;color:var(--text-faint);
+    font-family:var(--mono);font-size:11.5px;line-height:1.6;
+  }
+
+  /* ---------- monochrome animated status faces ---------- */
+  .face{width:26px;height:26px;position:relative;filter:grayscale(1);}
+  .face svg{width:100%;height:100%;display:block;}
+  .face .part{fill:none;}
+  .face circle.head{stroke:var(--text-dim);stroke-width:1.6;fill:none;}
+
+  .face.idle circle.head{animation:breathe 3.2s ease-in-out infinite;}
+  .face.idle .eye{fill:var(--text-dim);animation:blink 4.5s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
+  @keyframes blink{0%,92%,100%{transform:scaleY(1);}94%{transform:scaleY(0.1);}96%{transform:scaleY(1);}}
+
+  .face.ok{animation:laughTilt 1.1s ease-in-out infinite;}
+  .face.ok circle.head{stroke:#f0f0f0;}
+  .face.ok .eye{fill:#f0f0f0;}
+  .face.ok .mouth{stroke:#f0f0f0;stroke-width:1.8;fill:none;transform-origin:center;animation:laughMouth 0.6s ease-in-out infinite;}
+  @keyframes laughTilt{0%,100%{transform:rotate(-5deg);}50%{transform:rotate(5deg);}}
+  @keyframes laughMouth{0%,100%{transform:scaleY(1);}50%{transform:scaleY(1.6);}}
+
+  .face.err{animation:shake 0.42s ease-in-out infinite;}
+  .face.err circle.head{stroke:#e6e6e6;}
+  .face.err .spiral{stroke:#e6e6e6;stroke-width:1.4;fill:none;animation:spin 1.4s linear infinite;transform-origin:center;}
+  .face.err .mouth{stroke:#e6e6e6;stroke-width:1.6;fill:none;}
+  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-2px) rotate(-3deg);}75%{transform:translateX(2px) rotate(3deg);}}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+  @media (prefers-reduced-motion: reduce){
+    .face, .face *{animation:none !important;}
+  }
+
+  code.k{font-family:var(--mono);background:var(--panel-2);border:1px solid var(--border-soft);padding:1px 5px;border-radius:4px;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="brand-mark">{ }</div>
+    <div>
+      <h1>Свод</h1>
+      <p>редактор · линтер · склейка кода</p>
+    </div>
+  </div>
+  <div class="status-widget">
+    <div class="face idle" id="statusFace">
+      <svg viewBox="0 0 40 40">
+        <circle class="head" cx="20" cy="20" r="17"></circle>
+        <ellipse class="eye" cx="14" cy="17" rx="1.8" ry="2.4"></ellipse>
+        <ellipse class="eye" cx="26" cy="17" rx="1.8" ry="2.4"></ellipse>
+        <path class="mouth" d="M13 25 Q20 30 27 25"></path>
+        <g class="spiral-group"></g>
+      </svg>
+    </div>
+    <span class="label" id="statusLabel">код не загружен</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="toolbar">
+    <button class="btn primary" id="uploadBtn">Загрузить файл</button>
+    <input type="file" id="fileInput">
+    <select id="langSelect" aria-label="Язык программирования"></select>
+    <button class="btn" id="copyBtn">Копировать</button>
+    <button class="btn" id="clearBtn">Очистить</button>
+    <div class="spacer"></div>
+    <button class="btn primary" id="downloadBtn">Скачать код</button>
+  </div>
+
+  <div class="grid">
+    <!-- ============ EDITOR ============ -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Редактор</h2>
+        <span class="muted" id="fileNameLabel">без файла</span>
+      </div>
+      <div class="editor-wrap">
+        <div class="gutter" id="gutter">1</div>
+        <textarea id="codeInput" spellcheck="false" placeholder="Вставьте код сюда или загрузите файл..."></textarea>
+      </div>
+      <div class="editor-footbar">
+        <span id="statsLabel">0 строк · 0 символов</span>
+        <span class="muted">эвристическая проверка скобок и строк, не полноценная компиляция</span>
+      </div>
+    </div>
+
+    <!-- ============ SIDE PANELS ============ -->
+    <div style="display:flex;flex-direction:column;gap:18px;">
+
+      <div class="panel">
+        <div class="panel-head"><h2>Поиск по коду</h2></div>
+        <div class="panel-body">
+          <div class="search-row">
+            <input type="text" id="searchInput" placeholder="Найти строку или фрагмент...">
+            <button class="btn" id="searchBtn">Найти</button>
+          </div>
+          <div class="muted" id="searchSummary" style="margin-top:8px;">введите запрос</div>
+          <ul class="results-list" id="searchResults"></ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Проверка кода</h2></div>
+        <div class="panel-body">
+          <div class="ok-msg" id="lintSummary">
+            <span>Нет данных — загрузите или введите код</span>
+          </div>
+          <ul id="lintList"></ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Склейка частей кода</h2>
+        </div>
+        <div class="panel-body">
+          <div id="partsContainer"></div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn" id="addPartBtn">+ добавить часть</button>
+            <button class="btn primary" id="mergeBtn">Склеить в редактор</button>
+          </div>
+          <div class="muted" style="margin-top:8px;">части соединяются по порядку, содержимое каждой части не изменяется</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<footer class="note">
+  Проверка кода — это упрощённый статический разбор (баланс скобок, незакрытые строки и комментарии на основе выбранного языка).
+  Он не заменяет компилятор или интерпретатор и не гарантирует, что код исполнится без ошибок.
+</footer>
+
+<script>
+(function(){
+
+  const LANGS = [
+    {id:'javascript',label:'JavaScript',ext:'js',line:'//',block:['/*','*/']},
+    {id:'typescript',label:'TypeScript',ext:'ts',line:'//',block:['/*','*/']},
+    {id:'jsx',label:'JSX (React)',ext:'jsx',line:'//',block:['/*','*/']},
+    {id:'tsx',label:'TSX (React)',ext:'tsx',line:'//',block:['/*','*/']},
+    {id:'python',label:'Python',ext:'py',line:'#',block:null},
+    {id:'lua',label:'Lua',ext:'lua',line:'--',block:['--[[',']]']},
+    {id:'c',label:'C',ext:'c',line:'//',block:['/*','*/']},
+    {id:'cpp',label:'C++',ext:'cpp',line:'//',block:['/*','*/']},
+    {id:'csharp',label:'C#',ext:'cs',line:'//',block:['/*','*/']},
+    {id:'java',label:'Java',ext:'java',line:'//',block:['/*','*/']},
+    {id:'kotlin',label:'Kotlin',ext:'kt',line:'//',block:['/*','*/']},
+    {id:'go',label:'Go',ext:'go',line:'//',block:['/*','*/']},
+    {id:'rust',label:'Rust',ext:'rs',line:'//',block:['/*','*/']},
+    {id:'swift',label:'Swift',ext:'swift',line:'//',block:['/*','*/']},
+    {id:'php',label:'PHP',ext:'php',line:'//',block:['/*','*/']},
+    {id:'ruby',label:'Ruby',ext:'rb',line:'#',block:null},
+    {id:'perl',label:'Perl',ext:'pl',line:'#',block:null},
+    {id:'r',label:'R',ext:'r',line:'#',block:null},
+    {id:'matlab',label:'MATLAB',ext:'m',line:'%',block:['%{','%}']},
+    {id:'sql',label:'SQL',ext:'sql',line:'--',block:['/*','*/']},
+    {id:'bash',label:'Bash / Shell',ext:'sh',line:'#',block:null},
+    {id:'powershell',label:'PowerShell',ext:'ps1',line:'#',block:['<#','#>']},
+    {id:'html',label:'HTML',ext:'html',line:null,block:['<!--','-->']},
+    {id:'xml',label:'XML',ext:'xml',line:null,block:['<!--','-->']},
+    {id:'css',label:'CSS',ext:'css',line:null,block:['/*','*/']},
+    {id:'scss',label:'SCSS',ext:'scss',line:'//',block:['/*','*/']},
+    {id:'json',label:'JSON',ext:'json',line:null,block:null},
+    {id:'yaml',label:'YAML',ext:'yaml',line:'#',block:null},
+    {id:'markdown',label:'Markdown',ext:'md',line:null,block:null},
+    {id:'dart',label:'Dart',ext:'dart',line:'//',block:['/*','*/']},
+    {id:'scala',label:'Scala',ext:'scala',line:'//',block:['/*','*/']},
+    {id:'groovy',label:'Groovy',ext:'groovy',line:'//',block:['/*','*/']},
+    {id:'objectivec',label:'Objective-C',ext:'mm',line:'//',block:['/*','*/']},
+    {id:'haskell',label:'Haskell',ext:'hs',line:'--',block:['{-','-}']},
+    {id:'elixir',label:'Elixir',ext:'ex',line:'#',block:null},
+    {id:'erlang',label:'Erlang',ext:'erl',line:'%',block:null},
+    {id:'lisp',label:'Lisp / Scheme',ext:'lisp',line:';',block:null},
+    {id:'assembly',label:'Assembly',ext:'asm',line:';',block:null},
+    {id:'pascal',label:'Pascal / Delphi',ext:'pas',line:'//',block:['{','}']},
+    {id:'fortran',label:'Fortran',ext:'f90',line:'!',block:null},
+    {id:'cobol',label:'COBOL',ext:'cob',line:'*',block:null},
+    {id:'vba',label:'VBA',ext:'bas',line:"'",block:null},
+    {id:'solidity',label:'Solidity',ext:'sol',line:'//',block:['/*','*/']},
+    {id:'gdscript',label:'GDScript',ext:'gd',line:'#',block:null},
+    {id:'plaintext',label:'Обычный текст',ext:'txt',line:null,block:null},
+  ];
+
+  const EXT_MAP = {};
+  LANGS.forEach(l=>{ if(!EXT_MAP[l.ext]) EXT_MAP[l.ext]=l.id; });
+  // a few extra alias extensions
+  const ALIAS = {py:'python', htm:'html', yml:'yaml', shell:'bash', h:'c', hpp:'cpp', cxx:'cpp', mjs:'javascript', cjs:'javascript'};
+
+  const langSelect = document.getElementById('langSelect');
+  LANGS.forEach(l=>{
+    const opt = document.createElement('option');
+    opt.value = l.id; opt.textContent = l.label;
+    langSelect.appendChild(opt);
+  });
+  langSelect.value = 'plaintext';
+
+  const codeInput = document.getElementById('codeInput');
+  const gutter = document.getElementById('gutter');
+  const statsLabel = document.getElementById('statsLabel');
+  const fileNameLabel = document.getElementById('fileNameLabel');
+  const statusFace = document.getElementById('statusFace');
+  const statusLabel = document.getElementById('statusLabel');
+  const lintSummary = document.getElementById('lintSummary');
+  const lintList = document.getElementById('lintList');
+
+  function currentLang(){
+    return LANGS.find(l=>l.id===langSelect.value) || LANGS[LANGS.length-1];
+  }
+
+  function updateGutter(){
+    const lines = codeInput.value.split('\n').length;
+    let out = '';
+    for(let i=1;i<=lines;i++) out += i + '\n';
+    gutter.textContent = out;
+    gutter.scrollTop = codeInput.scrollTop;
+  }
+
+  function updateStats(){
+    const val = codeInput.value;
+    const lines = val === '' ? 0 : val.split('\n').length;
+    statsLabel.textContent = lines + ' строк · ' + val.length + ' символов';
+  }
+
+  codeInput.addEventListener('scroll', ()=>{ gutter.scrollTop = codeInput.scrollTop; });
+  codeInput.addEventListener('input', ()=>{ updateGutter(); updateStats(); runLint(); });
+
+  // ---------------- file upload ----------------
+  const uploadBtn = document.getElementById('uploadBtn');
+  const fileInput = document.getElementById('fileInput');
+  uploadBtn.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      codeInput.value = ev.target.result;
+      fileNameLabel.textContent = file.name;
+      const rawExt = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+      const langId = EXT_MAP[rawExt] || ALIAS[rawExt];
+      if(langId) langSelect.value = langId;
+      updateGutter(); updateStats(); runLint();
+    };
+    reader.onerror = function(){
+      alert('Не удалось прочитать файл. Попробуйте текстовый файл (.txt, .lua, .py, .js и т.д.)');
+    };
+    reader.readAsText(file);
+  });
+
+  // ---------------- copy / clear ----------------
+  document.getElementById('copyBtn').addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(codeInput.value);
+      flashLabel('скопировано');
+    }catch(e){
+      codeInput.select();
+      document.execCommand('copy');
+      flashLabel('скопировано');
+    }
+  });
+  document.getElementById('clearBtn').addEventListener('click', ()=>{
+    codeInput.value=''; fileNameLabel.textContent='без файла';
+    updateGutter(); updateStats(); runLint();
+  });
+  function flashLabel(text){
+    const old = fileNameLabel.textContent;
+    fileNameLabel.textContent = text;
+    setTimeout(()=>{ fileNameLabel.textContent = old; }, 1200);
+  }
+
+  // ---------------- download ----------------
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    const lang = currentLang();
+    const blob = new Blob([codeInput.value], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'code.' + lang.ext;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------------- search ----------------
+  const searchInput = document.getElementById('searchInput');
+  const searchBtn = document.getElementById('searchBtn');
+  const searchSummary = document.getElementById('searchSummary');
+  const searchResults = document.getElementById('searchResults');
+
+  function doSearch(){
+    const q = searchInput.value;
+    searchResults.innerHTML = '';
+    if(!q){ searchSummary.textContent = 'введите запрос'; return; }
+    const lines = codeInput.value.split('\n');
+    const qLower = q.toLowerCase();
+    let matches = [];
+    lines.forEach((lineText, idx)=>{
+      if(lineText.toLowerCase().includes(qLower)) matches.push({line: idx+1, text: lineText.trim()});
+    });
+    if(matches.length===0){
+      searchSummary.textContent = 'совпадений не найдено';
+      return;
+    }
+    searchSummary.textContent = matches.length + (matches.length===1 ? ' совпадение' : ' совпадений');
+    matches.forEach(m=>{
+      const li = document.createElement('li');
+      const snippet = m.text.length > 46 ? m.text.slice(0,46)+'…' : m.text;
+      li.textContent = 'строка ' + m.line + ': ' + (snippet || '(пусто)');
+      li.addEventListener('click', ()=> jumpToLine(m.line));
+      searchResults.appendChild(li);
+    });
+  }
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') doSearch(); });
+
+  function jumpToLine(lineNumber){
+    const lines = codeInput.value.split('\n');
+    let start = 0;
+    for(let i=0;i<lineNumber-1;i++) start += lines[i].length + 1;
+    const lineLen = (lines[lineNumber-1]||'').length;
+    codeInput.focus();
+    codeInput.setSelectionRange(start, start+lineLen);
+    const lineHeight = 21;
+    const targetTop = Math.max(0, (lineNumber-1)*lineHeight - codeInput.clientHeight/2);
+    codeInput.scrollTop = targetTop;
+    gutter.scrollTop = targetTop;
+  }
+
+  // ---------------- lint ----------------
+  function lint(code, conf){
+    const errors = [];
+    const stack = [];
+    let line = 1;
+    let i = 0;
+    const n = code.length;
+    let inString = null;
+    let stringStartLine = 0;
+    let inBlockComment = false;
+    let blockStartLine = 0;
+    const lineComment = conf.line;
+    const blockOpen = conf.block ? conf.block[0] : null;
+    const blockClose = conf.block ? conf.block[1] : null;
+    const map = {')':'(', ']':'[', '}':'{'};
+
+    while(i < n){
+      const ch = code[i];
+      if(ch === '\n'){ line++; i++; continue; }
+
+      if(inBlockComment){
+        if(blockClose && code.startsWith(blockClose, i)){ inBlockComment = false; i += blockClose.length; continue; }
+        i++; continue;
+      }
+      if(inString){
+        if(ch === '\\'){ i += 2; continue; }
+        if(ch === inString){ inString = null; i++; continue; }
+        i++; continue;
+      }
+      if(lineComment && code.startsWith(lineComment, i)){
+        const nl = code.indexOf('\n', i);
+        i = (nl === -1) ? n : nl;
+        continue;
+      }
+      if(blockOpen && code.startsWith(blockOpen, i)){
+        inBlockComment = true; blockStartLine = line; i += blockOpen.length; continue;
+      }
+      if(ch === '"' || ch === "'" || ch === '`'){
+        inString = ch; stringStartLine = line; i++; continue;
+      }
+      if(ch === '(' || ch === '[' || ch === '{'){
+        stack.push({ch, line}); i++; continue;
+      }
+      if(ch === ')' || ch === ']' || ch === '}'){
+        if(stack.length === 0 || stack[stack.length-1].ch !== map[ch]){
+          errors.push({line, message:'Лишняя закрывающая скобка «'+ch+'»'});
+        } else {
+          stack.pop();
+        }
+        i++; continue;
+      }
+      i++;
+    }
+    if(inString) errors.push({line: stringStartLine, message:'Незакрытая строка (кавычка без пары)'});
+    if(inBlockComment) errors.push({line: blockStartLine, message:'Незакрытый блочный комментарий'});
+    stack.forEach(s=> errors.push({line: s.line, message:'Не закрыта скобка «'+s.ch+'»'}));
+    errors.sort((a,b)=> a.line - b.line);
+    return errors;
+  }
+
+  function setFace(state){
+    statusFace.className = 'face ' + state;
+    if(state==='idle') statusLabel.textContent = 'код не загружен';
+    if(state==='ok') statusLabel.textContent = 'ошибок не найдено';
+    if(state==='err') statusLabel.textContent = 'найдены проблемы';
+  }
+
+  function runLint(){
+    const code = codeInput.value;
+    if(!code.trim()){
+      setFace('idle');
+      lintSummary.innerHTML = '<span>Нет данных — загрузите или введите код</span>';
+      lintList.innerHTML = '';
+      return;
+    }
+    const conf = currentLang();
+    const errors = lint(code, conf);
+    lintList.innerHTML = '';
+    if(errors.length === 0){
+      setFace('ok');
+      lintSummary.innerHTML = '<span>Явных ошибок скобок и строк не найдено</span>';
+      return;
+    }
+    setFace('err');
+    lintSummary.innerHTML = '<span>' + errors.length + (errors.length===1?' проблема':' проблем(ы)') + ' найдено</span>';
+    errors.forEach(err=>{
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="ln">стр. '+err.line+'</span><span>'+err.message+'</span>';
+      li.addEventListener('click', ()=> jumpToLine(err.line));
+      lintList.appendChild(li);
+    });
+  }
+
+  langSelect.addEventListener('change', runLint);
+
+  // ---------------- merge parts ----------------
+  const partsContainer = document.getElementById('partsContainer');
+  let partCount = 0;
+
+  function addPart(prefill){
+    partCount++;
+    const wrap = document.createElement('div');
+    wrap.className = 'part';
+    wrap.innerHTML =
+      '<div class="part-head"><span>Часть ' + partCount + '</span><button type="button" data-remove>убрать</button></div>' +
+      '<textarea spellcheck="false" placeholder="Вставьте фрагмент кода..."></textarea>';
+    const ta = wrap.querySelector('textarea');
+    if(prefill) ta.value = prefill;
+    wrap.querySelector('[data-remove]').addEventListener('click', ()=> wrap.remove());
+    partsContainer.appendChild(wrap);
+  }
+  addPart(); addPart();
+
+  document.getElementById('addPartBtn').addEventListener('click', ()=> addPart());
+
+  document.getElementById('mergeBtn').addEventListener('click', ()=>{
+    const textareas = partsContainer.querySelectorAll('textarea');
+    const pieces = [];
+    textareas.forEach(ta => pieces.push(ta.value));
+    const merged = pieces.join('\n');
+    codeInput.value = merged;
+    fileNameLabel.textContent = 'склеенный код';
+    updateGutter(); updateStats(); runLint();
+    codeInput.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+
+  // init
+  updateGutter();
+  updateStats();
+  setFace('idle');
+
+})();
+</script>
+</body>
+</html>
